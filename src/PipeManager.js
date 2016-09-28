@@ -1,22 +1,41 @@
 "use strict";
 
+var PipeType = {
+  Corner : 5,
+  Straight : 7
+}
+
 module.exports = exports = PipeManager
 
 function PipeManager(spritesheet) {
-  this.spritesheet = spritesheet;
-  this.map = [];
-  // spritesheet items are 32x32
-  // four wide by five tall
-  // 0, 1, 2, 3
-  // 4, 5, ...
+  this.spritesheet = {};
+  this.spritesheet.image = spritesheet;
+  this.spritesheet.size = 32;
+  this.spritesheet.width = 4;
+  this.spritesheet.height = 5;
 
-  // World map is 32 wide by 26 wide at 32x32 pixels
-  for(var i = 0; i < 16 * 14; i++){
-    var y = Math.floor(i/16);
-    var x = i % 16;
+  this.map = {};
+  this.map.items = [];
+  this.map.width = 16;
+  this.map.height = 14;
+  this.map.scale = 64;
 
-    this.map.push({x: x, y: y, idx: i%(5*4)});
-  }
+  this.pipeType = PipeType;
+}
+
+PipeManager.prototype.addPipe = function(location, pipeIdx){
+  if(this.findPipe(location)) return;
+  this.map.items.push({x: location.x, y: location.y, idx: pipeIdx});
+}
+
+PipeManager.prototype.findPipe = function(location){
+  return this.map.items.find(function(pipe) {
+      return pipe.x == location.x && pipe.y == location.y;
+  })
+}
+
+PipeManager.prototype.convertCoord = function(location){
+  return {x: Math.floor(location.x / 64),  y: Math.floor(location.y / 64)};
 }
 
 PipeManager.prototype.update = function(elapsedTime){
@@ -25,17 +44,16 @@ PipeManager.prototype.update = function(elapsedTime){
 
 PipeManager.prototype.render = function(elapsedTime, ctx){
   var self = this;
-  this.map.forEach(function(item){
-    // Double check these. I think dividin number is wrong
-    var y = Math.floor(item.idx/4);
-    var x = item.idx % 4;
+  this.map.items.forEach(function(item){
+    var y = Math.floor(item.idx/self.spritesheet.width);
+    var x = item.idx % self.spritesheet.width;
 
     ctx.drawImage(
       // Source Image
-      self.spritesheet,
+      self.spritesheet.image,
       // Source Rect
-      x * 32, y * 32, 32, 32,
+      x * self.spritesheet.size, y * self.spritesheet.size, self.spritesheet.size, self.spritesheet.size,
       // Destination Rect
-      item.x * 64, item.y * 64, 64, 64);
+      item.x * self.map.scale, item.y * self.map.scale, self.map.scale, self.map.scale);
   });
 }

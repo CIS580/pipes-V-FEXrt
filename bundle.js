@@ -1,23 +1,42 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 "use strict";
 
+var PipeType = {
+  Corner : 5,
+  Straight : 7
+}
+
 module.exports = exports = PipeManager
 
 function PipeManager(spritesheet) {
-  this.spritesheet = spritesheet;
-  this.map = [];
-  // spritesheet items are 32x32
-  // four wide by five tall
-  // 0, 1, 2, 3
-  // 4, 5, ...
+  this.spritesheet = {};
+  this.spritesheet.image = spritesheet;
+  this.spritesheet.size = 32;
+  this.spritesheet.width = 4;
+  this.spritesheet.height = 5;
 
-  // World map is 32 wide by 26 wide at 32x32 pixels
-  for(var i = 0; i < 16 * 14; i++){
-    var y = Math.floor(i/16);
-    var x = i % 16;
+  this.map = {};
+  this.map.items = [];
+  this.map.width = 16;
+  this.map.height = 14;
+  this.map.scale = 64;
 
-    this.map.push({x: x, y: y, idx: i%(5*4)});
-  }
+  this.pipeType = PipeType;
+}
+
+PipeManager.prototype.addPipe = function(location, pipeIdx){
+  if(this.findPipe(location)) return;
+  this.map.items.push({x: location.x, y: location.y, idx: pipeIdx});
+}
+
+PipeManager.prototype.findPipe = function(location){
+  return this.map.items.find(function(pipe) {
+      return pipe.x == location.x && pipe.y == location.y;
+  })
+}
+
+PipeManager.prototype.convertCoord = function(location){
+  return {x: Math.floor(location.x / 64),  y: Math.floor(location.y / 64)};
 }
 
 PipeManager.prototype.update = function(elapsedTime){
@@ -26,18 +45,17 @@ PipeManager.prototype.update = function(elapsedTime){
 
 PipeManager.prototype.render = function(elapsedTime, ctx){
   var self = this;
-  this.map.forEach(function(item){
-    // Double check these. I think dividin number is wrong
-    var y = Math.floor(item.idx/4);
-    var x = item.idx % 4;
+  this.map.items.forEach(function(item){
+    var y = Math.floor(item.idx/self.spritesheet.width);
+    var x = item.idx % self.spritesheet.width;
 
     ctx.drawImage(
       // Source Image
-      self.spritesheet,
+      self.spritesheet.image,
       // Source Rect
-      x * 32, y * 32, 32, 32,
+      x * self.spritesheet.size, y * self.spritesheet.size, self.spritesheet.size, self.spritesheet.size,
       // Destination Rect
-      item.x * 64, item.y * 64, 64, 64);
+      item.x * self.map.scale, item.y * self.map.scale, self.map.scale, self.map.scale);
   });
 }
 
@@ -109,9 +127,9 @@ var resourceManager = new ResourceManager(function(){
 resourceManager.addImage('assets/pipes.png');
 resourceManager.loadAll();
 
-
 canvas.onclick = function(event) {
   event.preventDefault();
+  pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), pipeManager.pipeType.Straight);
   // TODO: Place or rotate pipe tile
 }
 
@@ -152,6 +170,13 @@ function render(elapsedTime, ctx) {
   // TODO: Render the board
   //ctx.drawImage(resourceManager.getResource('assets/pipes.png'), 0, 0);
   pipeManager.render(elapsedTime, ctx);
+}
+
+function normalizeClick(event){
+  var rect = canvas.getBoundingClientRect();
+  var x = event.clientX - rect.left;
+  var y = event.clientY - rect.top;
+  return {x: x, y: y};
 }
 
 },{"./PipeManager.js":1,"./ResourceManager.js":2,"./game":4}],4:[function(require,module,exports){

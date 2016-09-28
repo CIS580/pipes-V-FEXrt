@@ -17,9 +17,9 @@ var resourceManager = new ResourceManager(function(){
 resourceManager.addImage('assets/pipes.png');
 resourceManager.loadAll();
 
-
 canvas.onclick = function(event) {
   event.preventDefault();
+  pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), pipeManager.pipeType.Straight);
   // TODO: Place or rotate pipe tile
 }
 
@@ -60,4 +60,11 @@ function render(elapsedTime, ctx) {
   // TODO: Render the board
   //ctx.drawImage(resourceManager.getResource('assets/pipes.png'), 0, 0);
   pipeManager.render(elapsedTime, ctx);
+}
+
+function normalizeClick(event){
+  var rect = canvas.getBoundingClientRect();
+  var x = event.clientX - rect.left;
+  var y = event.clientY - rect.top;
+  return {x: x, y: y};
 }
