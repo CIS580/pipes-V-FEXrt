@@ -2,12 +2,21 @@
 
 /* Classes */
 const Game = require('./game');
-
+const ResourceManager = require('./ResourceManager.js');
+const PipeManager = require('./PipeManager.js');
 /* Global variables */
 var canvas = document.getElementById('screen');
 var game = new Game(canvas, update, render);
-var image = new Image();
-image.src = 'assets/pipes.png';
+var pipeManager;
+var resourceManager = new ResourceManager(function(){
+  // Load game
+  pipeManager = new PipeManager(resourceManager.getResource('assets/pipes.png'));
+  masterLoop(performance.now());
+});
+
+resourceManager.addImage('assets/pipes.png');
+resourceManager.loadAll();
+
 
 canvas.onclick = function(event) {
   event.preventDefault();
@@ -23,8 +32,6 @@ var masterLoop = function(timestamp) {
   game.loop(timestamp);
   window.requestAnimationFrame(masterLoop);
 }
-masterLoop(performance.now());
-
 
 /**
  * @function update
@@ -51,5 +58,6 @@ function render(elapsedTime, ctx) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // TODO: Render the board
-
+  //ctx.drawImage(resourceManager.getResource('assets/pipes.png'), 0, 0);
+  pipeManager.render(elapsedTime, ctx);
 }
