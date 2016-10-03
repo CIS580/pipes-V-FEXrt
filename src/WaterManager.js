@@ -4,24 +4,30 @@ module.exports = exports = WaterManager;
 
 const ProgressManager = require('./ProgressManager.js');
 
-function WaterManager(pipeManager, gameOverCallback) {
+function WaterManager(pipeManager, gameOverCallback, scoreCallback) {
   this.pipeManager = pipeManager;
-  this.currentPipe = pipeManager.sourcePipe;
   this.gameOverCallback = gameOverCallback;
+  this.scoreCallback = scoreCallback;
+  this.flowSpeed = 5000;
 
-  var origin = pipeManager.convertToReal(this.currentPipe);
+  this.reset();
+}
+
+WaterManager.prototype.reset = function(){
+  this.currentPipe = this.pipeManager.sourcePipe;
+
+  var origin = this.pipeManager.convertToReal(this.currentPipe);
   this.currentRect = {x: origin.x, y: origin.y, width: 60, height: 60};
   this.currentRectRender = {x: origin.x, y: origin.y, width: 0, height: 0};
 
   this.renderRects = [];
 
   var self = this;
-  this.progressManager = new ProgressManager(5000,
+  this.progressManager = new ProgressManager(this.flowSpeed,
     function(pm, percent){
       var flowIsFrom;
       if(self.lastPipe){
         flowIsFrom = self.pipeManager.getRelativeDirection(self.currentPipe, self.lastPipe);
-        console.log(flowIsFrom);
       }
 
       switch (self.pipeManager.getFlowDirection(self.currentPipe, flowIsFrom)) {
@@ -64,15 +70,15 @@ function WaterManager(pipeManager, gameOverCallback) {
           self.currentRectRender.height = self.currentRect.height * percent;
           break;
       }
-
-
     },
     function(pm) {
       // progress complete
       self.renderRects.push(self.currentRect);
 
+      self.scoreCallback(1);
+
       var cur = self.currentPipe;
-      self.currentPipe = pipeManager.getConnectedPipe(self.currentPipe, self.lastPipe);
+      self.currentPipe = self.pipeManager.getConnectedPipe(self.currentPipe, self.lastPipe);
       self.lastPipe = cur;
 
       if(!self.currentPipe){
@@ -82,11 +88,12 @@ function WaterManager(pipeManager, gameOverCallback) {
 
       self.currentPipe.enabled = false;
 
-      var origin = pipeManager.convertToReal(self.currentPipe);
+      var origin = self.pipeManager.convertToReal(self.currentPipe);
       self.currentRect = {x: origin.x, y: origin.y, width: 60, height: 60};
       self.currentRectRender = {x: origin.x, y: origin.y, width: 0, height: 0};
 
       self.progressManager.reset();
+      self.progressManager.progressLength = self.flowSpeed;
       self.progressManager.isActive = true;
       // TODO: get next rect to animate and reset
     });
@@ -98,6 +105,13 @@ WaterManager.prototype.update = function(time){
   this.progressManager.progress(time);
 }
 
+WaterManager.prototype.setLevel = function(level){
+  this.flowSpeed = 5000 - (1000 * level);
+  if(this.flowSpeed < 1000){
+    this.flowSpeed = 500;
+  }
+}
+
 WaterManager.prototype.render = function(time, ctx){
   ctx.fillStyle = "blue";
   this.renderRects.forEach(function(rect){
@@ -105,5 +119,4 @@ WaterManager.prototype.render = function(time, ctx){
   });
 
   ctx.fillRect(this.currentRectRender.x, this.currentRectRender.y, this.currentRectRender.width, this.currentRectRender.height);
-
 }

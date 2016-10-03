@@ -43,7 +43,6 @@ function PipeManager(spritesheet) {
   this.rotationMap[this.pipeType.Straight] = [7, 11];
   this.rotationMap[this.pipeType.Source] = [1, 3, 4, 12];
 
-
   this.attachmentMap = {};
   this.attachmentMap[this.pipeType.Corner] = [
     [this.Direction.Down, this.Direction.Right],
@@ -83,11 +82,19 @@ function PipeManager(spritesheet) {
   this.exitPipe.enabled = false;
 }
 
+PipeManager.prototype.reset = function(){
+
+  this.map.items = [];
+
+  this.sourcePipe = this.placeSource();
+  this.exitPipe = this.placeExit(this.sourcePipe);
+
+  this.sourcePipe.enabled = false;
+  this.exitPipe.enabled = false;
+}
+
 PipeManager.prototype.addPipe = function(location, pipeType){
   if(this.findPipe(location)) return;
-  if(location.x == 0 || location.y == 0) return;
-  if(location.x == this.map.width - 1) return;
-  if(location.y == this.map.height - 1) return;
   this.addPipeUnprotected(location, pipeType);
 }
 
@@ -146,12 +153,12 @@ PipeManager.prototype.getFlowDirection = function(pipe, relativeDirection){
 PipeManager.prototype.getRandomBoundary = function(){
   var location = {x: 0, y: 0};
   var xOption = [0, this.map.width - 1];
-  var yOption = [0, this.map.height -1];
+  var yOption = [0, this.map.height - 1];
 
   while(this.isCorner(location)){
     var isXEdge = (Math.random() >= 0.5);
     var cornerIdx = (Math.random() >= 0.5) ? 0 : 1;
-    var max = (isXEdge) ? this.map.width : this.map.height;
+    var max = (isXEdge) ? this.map.height : this.map.width;
     var other = Math.floor(Math.random() * max);
 
     if(isXEdge){
@@ -174,7 +181,7 @@ PipeManager.prototype.addBoundaryPipe = function(location){
 }
 
 PipeManager.prototype.placeSource = function(){
-  var location = (window.debug) ? {x: 5, y: this.map.height - 1} : this.getRandomBoundary();
+  var location = (window.debug) ? {x: 0, y: 6} : this.getRandomBoundary();
   var pipe = this.addBoundaryPipe(location);
   return pipe;
 }

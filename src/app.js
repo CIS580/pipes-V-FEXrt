@@ -1,16 +1,19 @@
 "use strict";
 
-window.debug = false;
+window.debug = true;
 
 /* Classes */
 const Game = require('./game');
 const ResourceManager = require('./ResourceManager.js');
 const PipeManager = require('./PipeManager.js');
 const WaterManager = require('./WaterManager.js');
+const Hud = require('./hud.js');
 
 /* Global variables */
 var canvas = document.getElementById('screen');
 var game = new Game(canvas, update, render);
+var player = {score: 0, level: 0};
+var hud = new Hud(player, canvas.width, canvas.height);
 var pipeManager;
 var waterManager;
 var resourceManager = new ResourceManager(function(){
@@ -18,9 +21,21 @@ var resourceManager = new ResourceManager(function(){
   pipeManager = new PipeManager(resourceManager.getResource('assets/pipes2.png'));
   type = pipeManager.pipeType.Straight;
 
-  waterManager = new WaterManager(pipeManager, function(didWin){
-    console.log(didWin ? "Win" : "Lose");
-  });
+  waterManager = new WaterManager(pipeManager,
+    function(didWin){
+      if(didWin){
+
+        pipeManager.reset();
+        waterManager.reset();
+
+        player.level += 1;
+        waterManager.setLevel(player.level);
+      }
+    },
+    function(scoreIncrease){
+      player.score += scoreIncrease;
+    }
+  );
 
   masterLoop(performance.now());
 });
@@ -37,6 +52,12 @@ var type;
 
 var onclickCallback = function(event) {
   event.preventDefault();
+
+  if(!window.debug){
+    // Randomly select pipe if not in debug mode
+    type = (Math.random() >= 0.5) ? pipeManager.pipeType.Straight :  pipeManager.pipeType.Corner;
+  }
+
   switch (event.which) {
     case Mouse.LeftClick:
       pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), type);
@@ -50,6 +71,8 @@ canvas.onclick = onclickCallback;
 canvas.oncontextmenu = onclickCallback;
 
 window.onkeydown = function(event){
+  if(!window.debug) return;
+
   if(type == pipeManager.pipeType.Straight){
     type = pipeManager.pipeType.Corner;
   } else {
@@ -76,8 +99,6 @@ var masterLoop = function(timestamp) {
  * the number of milliseconds passed since the last frame.
  */
 function update(elapsedTime) {
-
-  // TODO: Advance the fluid
   pipeManager.update(elapsedTime);
   waterManager.update(elapsedTime);
 }
@@ -95,6 +116,7 @@ function render(elapsedTime, ctx) {
 
   waterManager.render(elapsedTime, ctx);
   pipeManager.render(elapsedTime, ctx);
+  hud.render(elapsedTime, ctx);
 }
 
 function normalizeClick(event){

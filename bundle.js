@@ -44,7 +44,6 @@ function PipeManager(spritesheet) {
   this.rotationMap[this.pipeType.Straight] = [7, 11];
   this.rotationMap[this.pipeType.Source] = [1, 3, 4, 12];
 
-
   this.attachmentMap = {};
   this.attachmentMap[this.pipeType.Corner] = [
     [this.Direction.Down, this.Direction.Right],
@@ -84,11 +83,19 @@ function PipeManager(spritesheet) {
   this.exitPipe.enabled = false;
 }
 
+PipeManager.prototype.reset = function(){
+
+  this.map.items = [];
+
+  this.sourcePipe = this.placeSource();
+  this.exitPipe = this.placeExit(this.sourcePipe);
+
+  this.sourcePipe.enabled = false;
+  this.exitPipe.enabled = false;
+}
+
 PipeManager.prototype.addPipe = function(location, pipeType){
   if(this.findPipe(location)) return;
-  if(location.x == 0 || location.y == 0) return;
-  if(location.x == this.map.width - 1) return;
-  if(location.y == this.map.height - 1) return;
   this.addPipeUnprotected(location, pipeType);
 }
 
@@ -147,12 +154,12 @@ PipeManager.prototype.getFlowDirection = function(pipe, relativeDirection){
 PipeManager.prototype.getRandomBoundary = function(){
   var location = {x: 0, y: 0};
   var xOption = [0, this.map.width - 1];
-  var yOption = [0, this.map.height -1];
+  var yOption = [0, this.map.height - 1];
 
   while(this.isCorner(location)){
     var isXEdge = (Math.random() >= 0.5);
     var cornerIdx = (Math.random() >= 0.5) ? 0 : 1;
-    var max = (isXEdge) ? this.map.width : this.map.height;
+    var max = (isXEdge) ? this.map.height : this.map.width;
     var other = Math.floor(Math.random() * max);
 
     if(isXEdge){
@@ -175,7 +182,7 @@ PipeManager.prototype.addBoundaryPipe = function(location){
 }
 
 PipeManager.prototype.placeSource = function(){
-  var location = (window.debug) ? {x: 5, y: this.map.height - 1} : this.getRandomBoundary();
+  var location = (window.debug) ? {x: 0, y: 6} : this.getRandomBoundary();
   var pipe = this.addBoundaryPipe(location);
   return pipe;
 }
@@ -397,24 +404,30 @@ module.exports = exports = WaterManager;
 
 const ProgressManager = require('./ProgressManager.js');
 
-function WaterManager(pipeManager, gameOverCallback) {
+function WaterManager(pipeManager, gameOverCallback, scoreCallback) {
   this.pipeManager = pipeManager;
-  this.currentPipe = pipeManager.sourcePipe;
   this.gameOverCallback = gameOverCallback;
+  this.scoreCallback = scoreCallback;
+  this.flowSpeed = 5000;
 
-  var origin = pipeManager.convertToReal(this.currentPipe);
+  this.reset();
+}
+
+WaterManager.prototype.reset = function(){
+  this.currentPipe = this.pipeManager.sourcePipe;
+
+  var origin = this.pipeManager.convertToReal(this.currentPipe);
   this.currentRect = {x: origin.x, y: origin.y, width: 60, height: 60};
   this.currentRectRender = {x: origin.x, y: origin.y, width: 0, height: 0};
 
   this.renderRects = [];
 
   var self = this;
-  this.progressManager = new ProgressManager(5000,
+  this.progressManager = new ProgressManager(this.flowSpeed,
     function(pm, percent){
       var flowIsFrom;
       if(self.lastPipe){
         flowIsFrom = self.pipeManager.getRelativeDirection(self.currentPipe, self.lastPipe);
-        console.log(flowIsFrom);
       }
 
       switch (self.pipeManager.getFlowDirection(self.currentPipe, flowIsFrom)) {
@@ -457,15 +470,15 @@ function WaterManager(pipeManager, gameOverCallback) {
           self.currentRectRender.height = self.currentRect.height * percent;
           break;
       }
-
-
     },
     function(pm) {
       // progress complete
       self.renderRects.push(self.currentRect);
 
+      self.scoreCallback(1);
+
       var cur = self.currentPipe;
-      self.currentPipe = pipeManager.getConnectedPipe(self.currentPipe, self.lastPipe);
+      self.currentPipe = self.pipeManager.getConnectedPipe(self.currentPipe, self.lastPipe);
       self.lastPipe = cur;
 
       if(!self.currentPipe){
@@ -475,11 +488,12 @@ function WaterManager(pipeManager, gameOverCallback) {
 
       self.currentPipe.enabled = false;
 
-      var origin = pipeManager.convertToReal(self.currentPipe);
+      var origin = self.pipeManager.convertToReal(self.currentPipe);
       self.currentRect = {x: origin.x, y: origin.y, width: 60, height: 60};
       self.currentRectRender = {x: origin.x, y: origin.y, width: 0, height: 0};
 
       self.progressManager.reset();
+      self.progressManager.progressLength = self.flowSpeed;
       self.progressManager.isActive = true;
       // TODO: get next rect to animate and reset
     });
@@ -491,6 +505,13 @@ WaterManager.prototype.update = function(time){
   this.progressManager.progress(time);
 }
 
+WaterManager.prototype.setLevel = function(level){
+  this.flowSpeed = 5000 - (1000 * level);
+  if(this.flowSpeed < 1000){
+    this.flowSpeed = 500;
+  }
+}
+
 WaterManager.prototype.render = function(time, ctx){
   ctx.fillStyle = "blue";
   this.renderRects.forEach(function(rect){
@@ -498,23 +519,25 @@ WaterManager.prototype.render = function(time, ctx){
   });
 
   ctx.fillRect(this.currentRectRender.x, this.currentRectRender.y, this.currentRectRender.width, this.currentRectRender.height);
-
 }
 
 },{"./ProgressManager.js":2}],5:[function(require,module,exports){
 "use strict";
 
-window.debug = false;
+window.debug = true;
 
 /* Classes */
 const Game = require('./game');
 const ResourceManager = require('./ResourceManager.js');
 const PipeManager = require('./PipeManager.js');
 const WaterManager = require('./WaterManager.js');
+const Hud = require('./hud.js');
 
 /* Global variables */
 var canvas = document.getElementById('screen');
 var game = new Game(canvas, update, render);
+var player = {score: 0, level: 0};
+var hud = new Hud(player, canvas.width, canvas.height);
 var pipeManager;
 var waterManager;
 var resourceManager = new ResourceManager(function(){
@@ -522,9 +545,21 @@ var resourceManager = new ResourceManager(function(){
   pipeManager = new PipeManager(resourceManager.getResource('assets/pipes2.png'));
   type = pipeManager.pipeType.Straight;
 
-  waterManager = new WaterManager(pipeManager, function(didWin){
-    console.log(didWin ? "Win" : "Lose");
-  });
+  waterManager = new WaterManager(pipeManager,
+    function(didWin){
+      if(didWin){
+
+        pipeManager.reset();
+        waterManager.reset();
+
+        player.level += 1;
+        waterManager.setLevel(player.level);
+      }
+    },
+    function(scoreIncrease){
+      player.score += scoreIncrease;
+    }
+  );
 
   masterLoop(performance.now());
 });
@@ -541,6 +576,12 @@ var type;
 
 var onclickCallback = function(event) {
   event.preventDefault();
+
+  if(!window.debug){
+    // Randomly select pipe if not in debug mode
+    type = (Math.random() >= 0.5) ? pipeManager.pipeType.Straight :  pipeManager.pipeType.Corner;
+  }
+
   switch (event.which) {
     case Mouse.LeftClick:
       pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), type);
@@ -554,6 +595,8 @@ canvas.onclick = onclickCallback;
 canvas.oncontextmenu = onclickCallback;
 
 window.onkeydown = function(event){
+  if(!window.debug) return;
+
   if(type == pipeManager.pipeType.Straight){
     type = pipeManager.pipeType.Corner;
   } else {
@@ -580,8 +623,6 @@ var masterLoop = function(timestamp) {
  * the number of milliseconds passed since the last frame.
  */
 function update(elapsedTime) {
-
-  // TODO: Advance the fluid
   pipeManager.update(elapsedTime);
   waterManager.update(elapsedTime);
 }
@@ -599,6 +640,7 @@ function render(elapsedTime, ctx) {
 
   waterManager.render(elapsedTime, ctx);
   pipeManager.render(elapsedTime, ctx);
+  hud.render(elapsedTime, ctx);
 }
 
 function normalizeClick(event){
@@ -608,7 +650,7 @@ function normalizeClick(event){
   return {x: x, y: y};
 }
 
-},{"./PipeManager.js":1,"./ResourceManager.js":3,"./WaterManager.js":4,"./game":6}],6:[function(require,module,exports){
+},{"./PipeManager.js":1,"./ResourceManager.js":3,"./WaterManager.js":4,"./game":6,"./hud.js":7}],6:[function(require,module,exports){
 "use strict";
 
 /**
@@ -664,6 +706,88 @@ Game.prototype.loop = function(newTime) {
 
   // Flip the back buffer
   this.frontCtx.drawImage(this.backBuffer, 0, 0);
+}
+
+},{}],7:[function(require,module,exports){
+"use strict";
+
+/**
+ * @module exports the Hud class
+ */
+module.exports = exports = Hud;
+
+/**
+ * @constructor Hud
+ * Creates a new Hud object
+ */
+function Hud(player, canvasWidth, canvasHeight) {
+  var widthMultiTop = 0.4;
+  var widthMultiBottom = 0.4;
+  this.player = player;
+
+  // Top Hud
+  this.top = {};
+  this.top.width = canvasWidth * widthMultiTop;
+  this.top.height = 32;
+  this.top.x = canvasWidth * ((1 - widthMultiTop)/2);
+  this.top.y = 0;
+
+  // Bottom Hud
+  this.bottom = {};
+  this.bottom.width = canvasWidth * widthMultiBottom;
+  this.bottom.height = 32;
+  this.bottom.x = canvasWidth * ((1 - widthMultiBottom)/2);
+  this.bottom.y = canvasHeight - this.bottom.height;
+}
+
+/**
+ * @function updates the Hud object
+ * {DOMHighResTimeStamp} time the elapsed time since the last frame
+ */
+Hud.prototype.update = function(time) {
+}
+
+/**
+ * @function renders the Hud into the provided context
+ * {DOMHighResTimeStamp} time the elapsed time since the last frame
+ * {CanvasRenderingContext2D} ctx the context to render into
+ */
+Hud.prototype.render = function(time, ctx) {
+  var cornerRadius = 50;
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = "black";
+
+  // Draw Top Hud
+  ctx.beginPath();
+  ctx.moveTo(this.top.x + cornerRadius, this.top.y + this.top.height);
+  ctx.lineTo(this.top.x + this.top.width - cornerRadius, this.top.y + this.top.height);
+  ctx.arc(this.top.x + this.top.width - cornerRadius, this.top.y, this.top.height, 0.5*Math.PI, 0, true);
+  ctx.lineTo(this.top.x, this.top.y);
+  ctx.arc(this.top.x + cornerRadius, this.top.y, this.top.height, Math.PI, 0.5 * Math.PI, true);
+  ctx.fill();
+
+  // Draw Bottom Hud
+  ctx.beginPath();
+  ctx.moveTo(this.bottom.x + cornerRadius, this.bottom.y);
+  ctx.lineTo(this.bottom.x + this.bottom.width - cornerRadius, this.bottom.y);
+  ctx.arc(this.bottom.x + this.bottom.width - cornerRadius, this.bottom.y + this.bottom.height, this.bottom.height, 1.5*Math.PI, 0);
+  ctx.lineTo(this.bottom.x, this.bottom.y + this.bottom.height);
+  ctx.arc(this.bottom.x + cornerRadius, this.bottom.y + this.bottom.height, this.bottom.height, Math.PI, 1.5 * Math.PI);
+  ctx.fill();
+
+  ctx.restore();
+
+  var centerX = this.bottom.x + (this.bottom.width / 2);
+  var bottomCenterY = this.bottom.y + (this.bottom.height / 2);
+  var topCenterY = this.top.y + (this.top.height / 2);
+
+  ctx.fillStyle = "yellow";
+  ctx.font = "bold 24px Arial";
+  ctx.textAlign="center";
+
+  ctx.fillText("Level: " + this.player.level, centerX, topCenterY + 10)
+  ctx.fillText("Score: " + this.player.score, centerX, bottomCenterY + 10 );
 }
 
 },{}]},{},[5]);
