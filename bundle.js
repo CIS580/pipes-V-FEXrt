@@ -26,7 +26,11 @@ function PipeManager(spritesheet) {
     Up: 0,
     Down: 1,
     Left: 2,
-    Right: 3
+    Right: 3,
+    UpRight: 4,
+    UpLeft: 5,
+    DownRight: 6,
+    DownLeft: 7
   };
 
   this.Direction.inverse = {};
@@ -59,8 +63,25 @@ function PipeManager(spritesheet) {
     [this.Direction.Down]
   ];
 
+  this.flowDirectionMap = {};
+  this.flowDirectionMap[this.pipeType.Corner] = [
+    {0: this.Direction.UpRight, 2: this.Direction.DownLeft},
+    {0: this.Direction.UpLeft, 3: this.Direction.DownRight},
+    {1: this.Direction.DownRight, 2: this.Direction.UpLeft},
+    {1: this.Direction.DownLeft, 3: this.Direction.UpRight}
+  ];
+  this.flowDirectionMap[this.pipeType.Source] = [
+    [this.Direction.Left],
+    [this.Direction.Right],
+    [this.Direction.Up],
+    [this.Direction.Down]
+  ];
+
   this.sourcePipe = this.placeSource();
   this.exitPipe = this.placeExit(this.sourcePipe);
+
+  this.sourcePipe.enabled = false;
+  this.exitPipe.enabled = false;
 }
 
 PipeManager.prototype.addPipe = function(location, pipeType){
@@ -77,7 +98,7 @@ PipeManager.prototype.addPipeUnprotected = function(location, pipeType){
 
 PipeManager.prototype.rotatePipe = function(location){
   var pipe = this.findPipe(location)
-  if(!pipe) return;
+  if(typeof pipe === 'undefined') return;
   if(!pipe.enabled) return;
   pipe.idx = (pipe.idx + 1) % this.rotationMap[pipe.type].length;
 }
@@ -90,7 +111,7 @@ PipeManager.prototype.findPipe = function(location){
 
 PipeManager.prototype.lockPipe = function(location){
   var pipe = this.findPipe(location)
-  if(!pipe) return;
+  if(typeof pipe === 'undefined') return;
   pipe.enabled = false;
 }
 
@@ -105,6 +126,22 @@ PipeManager.prototype.isCorner = function(location){
     (location.x == this.map.width - 1 && location.y == 0) ||
     (location.x == this.map.width - 1 && location.y == this.map.height - 1)
   )
+}
+
+PipeManager.prototype.getFlowDirection = function(pipe, relativeDirection){
+  if((typeof relativeDirection === 'undefined') || pipe.type == this.pipeType.Source){
+    var direction = this.flowDirectionMap[pipe.type][pipe.idx][0];
+    if(pipe === this.exitPipe) direction = this.Direction.inverse[direction];
+    return direction
+  }
+
+  if(pipe.type == this.pipeType.Straight){
+    return relativeDirection;
+  }
+
+  if(pipe.type == this.pipeType.Corner){
+    return this.flowDirectionMap[pipe.type][pipe.idx][relativeDirection];
+  }
 }
 
 PipeManager.prototype.getRandomBoundary = function(){
@@ -138,7 +175,7 @@ PipeManager.prototype.addBoundaryPipe = function(location){
 }
 
 PipeManager.prototype.placeSource = function(){
-  var location = (window.debug) ? {x: 0, y: 6} : this.getRandomBoundary();
+  var location = (window.debug) ? {x: 5, y: this.map.height - 1} : this.getRandomBoundary();
   var pipe = this.addBoundaryPipe(location);
   return pipe;
 }
@@ -188,7 +225,6 @@ PipeManager.prototype.getConnectedPipe = function(pipe, ignoringPipe){
   });
 
   var attachedPipe;
-
   adjacentPipes.forEach(function(adjacentPipe){
     if(self.arePipesAttached(pipe, adjacentPipe)) attachedPipe = adjacentPipe;
   });
@@ -196,8 +232,7 @@ PipeManager.prototype.getConnectedPipe = function(pipe, ignoringPipe){
   return attachedPipe;
 }
 
-PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
-
+PipeManager.prototype.getRelativeDirection = function(pipe1, pipe2){
   var cx = pipe1.x - pipe2.x;
   // if cx == 0, then connected UP/Down.
   // if cx < 0 pipe1 is on left, cx > 0 pipe1 is on right
@@ -207,12 +242,12 @@ PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
   var direction;
 
   if(cx == 0 && cy == 0){
-    console.log("PipeManager.arePipesAttached: pipes are in the same location");
+    console.log("PipeManager.getRelativeDirection: pipes are in the same location");
     return;
   }
 
   if((cx != 0 && cy != 0) || (Math.abs(cx) > 1) || (Math.abs(cy) > 1)){
-    console.log("PipeManager.arePipesAttached: pipes are not adjacent.");
+    console.log("PipeManager.getRelativeDirection: pipes are not adjacent.");
     return;
   }
 
@@ -229,6 +264,13 @@ PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
       direction = this.Direction.Right;
     }
   }
+
+  return direction;
+}
+
+PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
+  var direction = this.getRelativeDirection(pipe1, pipe2);
+  if (typeof direction === 'undefined') return false;
 
   var pipe1Can = this.attachmentMap[pipe1.type][pipe1.idx].indexOf(this.Direction.inverse[direction]) != -1
   var pipe2Can = this.attachmentMap[pipe2.type][pipe2.idx].indexOf(direction) != -1
@@ -292,7 +334,12 @@ ProgressManager.prototype.progress = function(time){
       this.callbackProgress(this, this.percent);
     }
   }
+}
 
+ProgressManager.prototype.reset = function(){
+  this.progressTimer = 0;
+  this.isProgressing = true;
+  this.isActive = false;
 }
 
 },{}],3:[function(require,module,exports){
@@ -350,12 +397,13 @@ module.exports = exports = WaterManager;
 
 const ProgressManager = require('./ProgressManager.js');
 
-function WaterManager(pipeManager) {
+function WaterManager(pipeManager, gameOverCallback) {
   this.pipeManager = pipeManager;
   this.currentPipe = pipeManager.sourcePipe;
+  this.gameOverCallback = gameOverCallback;
 
   var origin = pipeManager.convertToReal(this.currentPipe);
-  this.currentRect = {x: origin.x, y: origin.y, width: 64, height: 64};
+  this.currentRect = {x: origin.x, y: origin.y, width: 60, height: 60};
   this.currentRectRender = {x: origin.x, y: origin.y, width: 0, height: 0};
 
   this.renderRects = [];
@@ -363,15 +411,76 @@ function WaterManager(pipeManager) {
   var self = this;
   this.progressManager = new ProgressManager(5000,
     function(pm, percent){
-      // progress percent completion
-      self.currentRectRender.width = self.currentRect.width * percent;
-      self.currentRectRender.height = self.currentRect.height * percent;
-      //TODO: Variable animation direction
+      var flowIsFrom;
+      if(self.lastPipe){
+        flowIsFrom = self.pipeManager.getRelativeDirection(self.currentPipe, self.lastPipe);
+        console.log(flowIsFrom);
+      }
+
+      switch (self.pipeManager.getFlowDirection(self.currentPipe, flowIsFrom)) {
+        case self.pipeManager.Direction.Right:
+          self.currentRectRender.width = self.currentRect.width * percent;
+          self.currentRectRender.height = self.currentRect.height;
+          break;
+        case self.pipeManager.Direction.Left:
+          self.currentRectRender.x = self.currentRect.x + (self.currentRect.width - self.currentRect.width * percent)
+          self.currentRectRender.width = self.currentRect.width * percent;
+          self.currentRectRender.height = self.currentRect.height;
+          break;
+        case self.pipeManager.Direction.Down:
+          self.currentRectRender.width = self.currentRect.width;
+          self.currentRectRender.height = self.currentRect.height * percent;
+          break;
+        case self.pipeManager.Direction.Up:
+          self.currentRectRender.y = self.currentRect.y + (self.currentRect.height - self.currentRect.height * percent)
+          self.currentRectRender.width = self.currentRect.width;
+          self.currentRectRender.height = self.currentRect.height * percent;
+          break;
+        case self.pipeManager.Direction.DownRight:
+          self.currentRectRender.width = self.currentRect.width * percent;
+          self.currentRectRender.height = self.currentRect.height * percent;
+          break;
+        case self.pipeManager.Direction.DownLeft:
+          self.currentRectRender.x = self.currentRect.x + (self.currentRect.width - self.currentRect.width * percent)
+          self.currentRectRender.width = self.currentRect.width * percent;
+          self.currentRectRender.height = self.currentRect.height * percent;
+          break;
+        case self.pipeManager.Direction.UpRight:
+          self.currentRectRender.y = self.currentRect.y + (self.currentRect.height - self.currentRect.height * percent)
+          self.currentRectRender.width = self.currentRect.width * percent;
+          self.currentRectRender.height = self.currentRect.height * percent;
+          break;
+        case self.pipeManager.Direction.UpLeft:
+          self.currentRectRender.x = self.currentRect.x + (self.currentRect.width - self.currentRect.width * percent)
+          self.currentRectRender.y = self.currentRect.y + (self.currentRect.height - self.currentRect.height * percent)
+          self.currentRectRender.width = self.currentRect.width * percent;
+          self.currentRectRender.height = self.currentRect.height * percent;
+          break;
+      }
+
 
     },
     function(pm) {
       // progress complete
       self.renderRects.push(self.currentRect);
+
+      var cur = self.currentPipe;
+      self.currentPipe = pipeManager.getConnectedPipe(self.currentPipe, self.lastPipe);
+      self.lastPipe = cur;
+
+      if(!self.currentPipe){
+        self.gameOverCallback(self.lastPipe === self.pipeManager.exitPipe);
+        return;
+      }
+
+      self.currentPipe.enabled = false;
+
+      var origin = pipeManager.convertToReal(self.currentPipe);
+      self.currentRect = {x: origin.x, y: origin.y, width: 60, height: 60};
+      self.currentRectRender = {x: origin.x, y: origin.y, width: 0, height: 0};
+
+      self.progressManager.reset();
+      self.progressManager.isActive = true;
       // TODO: get next rect to animate and reset
     });
 
@@ -395,7 +504,7 @@ WaterManager.prototype.render = function(time, ctx){
 },{"./ProgressManager.js":2}],5:[function(require,module,exports){
 "use strict";
 
-window.debug = true;
+window.debug = false;
 
 /* Classes */
 const Game = require('./game');
@@ -410,10 +519,12 @@ var pipeManager;
 var waterManager;
 var resourceManager = new ResourceManager(function(){
   // Load game
-  pipeManager = new PipeManager(resourceManager.getResource('assets/pipes.png'));
+  pipeManager = new PipeManager(resourceManager.getResource('assets/pipes2.png'));
   type = pipeManager.pipeType.Straight;
 
-  waterManager = new WaterManager(pipeManager);
+  waterManager = new WaterManager(pipeManager, function(didWin){
+    console.log(didWin ? "Win" : "Lose");
+  });
 
   masterLoop(performance.now());
 });
@@ -423,7 +534,7 @@ var Mouse = {
   RightClick: 3
 }
 
-resourceManager.addImage('assets/pipes.png');
+resourceManager.addImage('assets/pipes2.png');
 resourceManager.loadAll();
 
 var type;

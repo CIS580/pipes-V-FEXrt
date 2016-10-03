@@ -25,7 +25,11 @@ function PipeManager(spritesheet) {
     Up: 0,
     Down: 1,
     Left: 2,
-    Right: 3
+    Right: 3,
+    UpRight: 4,
+    UpLeft: 5,
+    DownRight: 6,
+    DownLeft: 7
   };
 
   this.Direction.inverse = {};
@@ -58,8 +62,25 @@ function PipeManager(spritesheet) {
     [this.Direction.Down]
   ];
 
+  this.flowDirectionMap = {};
+  this.flowDirectionMap[this.pipeType.Corner] = [
+    {0: this.Direction.UpRight, 2: this.Direction.DownLeft},
+    {0: this.Direction.UpLeft, 3: this.Direction.DownRight},
+    {1: this.Direction.DownRight, 2: this.Direction.UpLeft},
+    {1: this.Direction.DownLeft, 3: this.Direction.UpRight}
+  ];
+  this.flowDirectionMap[this.pipeType.Source] = [
+    [this.Direction.Left],
+    [this.Direction.Right],
+    [this.Direction.Up],
+    [this.Direction.Down]
+  ];
+
   this.sourcePipe = this.placeSource();
   this.exitPipe = this.placeExit(this.sourcePipe);
+
+  this.sourcePipe.enabled = false;
+  this.exitPipe.enabled = false;
 }
 
 PipeManager.prototype.addPipe = function(location, pipeType){
@@ -76,7 +97,7 @@ PipeManager.prototype.addPipeUnprotected = function(location, pipeType){
 
 PipeManager.prototype.rotatePipe = function(location){
   var pipe = this.findPipe(location)
-  if(!pipe) return;
+  if(typeof pipe === 'undefined') return;
   if(!pipe.enabled) return;
   pipe.idx = (pipe.idx + 1) % this.rotationMap[pipe.type].length;
 }
@@ -89,7 +110,7 @@ PipeManager.prototype.findPipe = function(location){
 
 PipeManager.prototype.lockPipe = function(location){
   var pipe = this.findPipe(location)
-  if(!pipe) return;
+  if(typeof pipe === 'undefined') return;
   pipe.enabled = false;
 }
 
@@ -104,6 +125,22 @@ PipeManager.prototype.isCorner = function(location){
     (location.x == this.map.width - 1 && location.y == 0) ||
     (location.x == this.map.width - 1 && location.y == this.map.height - 1)
   )
+}
+
+PipeManager.prototype.getFlowDirection = function(pipe, relativeDirection){
+  if((typeof relativeDirection === 'undefined') || pipe.type == this.pipeType.Source){
+    var direction = this.flowDirectionMap[pipe.type][pipe.idx][0];
+    if(pipe === this.exitPipe) direction = this.Direction.inverse[direction];
+    return direction
+  }
+
+  if(pipe.type == this.pipeType.Straight){
+    return relativeDirection;
+  }
+
+  if(pipe.type == this.pipeType.Corner){
+    return this.flowDirectionMap[pipe.type][pipe.idx][relativeDirection];
+  }
 }
 
 PipeManager.prototype.getRandomBoundary = function(){
@@ -137,7 +174,7 @@ PipeManager.prototype.addBoundaryPipe = function(location){
 }
 
 PipeManager.prototype.placeSource = function(){
-  var location = (window.debug) ? {x: 0, y: 6} : this.getRandomBoundary();
+  var location = (window.debug) ? {x: 5, y: this.map.height - 1} : this.getRandomBoundary();
   var pipe = this.addBoundaryPipe(location);
   return pipe;
 }
@@ -187,7 +224,6 @@ PipeManager.prototype.getConnectedPipe = function(pipe, ignoringPipe){
   });
 
   var attachedPipe;
-
   adjacentPipes.forEach(function(adjacentPipe){
     if(self.arePipesAttached(pipe, adjacentPipe)) attachedPipe = adjacentPipe;
   });
@@ -195,8 +231,7 @@ PipeManager.prototype.getConnectedPipe = function(pipe, ignoringPipe){
   return attachedPipe;
 }
 
-PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
-
+PipeManager.prototype.getRelativeDirection = function(pipe1, pipe2){
   var cx = pipe1.x - pipe2.x;
   // if cx == 0, then connected UP/Down.
   // if cx < 0 pipe1 is on left, cx > 0 pipe1 is on right
@@ -206,12 +241,12 @@ PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
   var direction;
 
   if(cx == 0 && cy == 0){
-    console.log("PipeManager.arePipesAttached: pipes are in the same location");
+    console.log("PipeManager.getRelativeDirection: pipes are in the same location");
     return;
   }
 
   if((cx != 0 && cy != 0) || (Math.abs(cx) > 1) || (Math.abs(cy) > 1)){
-    console.log("PipeManager.arePipesAttached: pipes are not adjacent.");
+    console.log("PipeManager.getRelativeDirection: pipes are not adjacent.");
     return;
   }
 
@@ -228,6 +263,13 @@ PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
       direction = this.Direction.Right;
     }
   }
+
+  return direction;
+}
+
+PipeManager.prototype.arePipesAttached = function(pipe1, pipe2){
+  var direction = this.getRelativeDirection(pipe1, pipe2);
+  if (typeof direction === 'undefined') return false;
 
   var pipe1Can = this.attachmentMap[pipe1.type][pipe1.idx].indexOf(this.Direction.inverse[direction]) != -1
   var pipe2Can = this.attachmentMap[pipe2.type][pipe2.idx].indexOf(direction) != -1

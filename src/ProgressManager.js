@@ -28,5 +28,10 @@ ProgressManager.prototype.progress = function(time){
       this.callbackProgress(this, this.percent);
     }
   }
+}
 
+ProgressManager.prototype.reset = function(){
+  this.progressTimer = 0;
+  this.isProgressing = true;
+  this.isActive = false;
 }

@@ -1,6 +1,6 @@
 "use strict";
 
-window.debug = true;
+window.debug = false;
 
 /* Classes */
 const Game = require('./game');
@@ -15,10 +15,12 @@ var pipeManager;
 var waterManager;
 var resourceManager = new ResourceManager(function(){
   // Load game
-  pipeManager = new PipeManager(resourceManager.getResource('assets/pipes.png'));
+  pipeManager = new PipeManager(resourceManager.getResource('assets/pipes2.png'));
   type = pipeManager.pipeType.Straight;
 
-  waterManager = new WaterManager(pipeManager);
+  waterManager = new WaterManager(pipeManager, function(didWin){
+    console.log(didWin ? "Win" : "Lose");
+  });
 
   masterLoop(performance.now());
 });
@@ -28,7 +30,7 @@ var Mouse = {
   RightClick: 3
 }
 
-resourceManager.addImage('assets/pipes.png');
+resourceManager.addImage('assets/pipes2.png');
 resourceManager.loadAll();
 
 var type;
