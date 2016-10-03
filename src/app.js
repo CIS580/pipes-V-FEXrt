@@ -1,26 +1,58 @@
 "use strict";
 
+window.debug = true;
+
 /* Classes */
 const Game = require('./game');
 const ResourceManager = require('./ResourceManager.js');
 const PipeManager = require('./PipeManager.js');
+const WaterManager = require('./WaterManager.js');
+
 /* Global variables */
 var canvas = document.getElementById('screen');
 var game = new Game(canvas, update, render);
 var pipeManager;
+var waterManager;
 var resourceManager = new ResourceManager(function(){
   // Load game
   pipeManager = new PipeManager(resourceManager.getResource('assets/pipes.png'));
+  type = pipeManager.pipeType.Straight;
+
+  waterManager = new WaterManager(pipeManager);
+
   masterLoop(performance.now());
 });
+
+var Mouse = {
+  LeftClick: 1,
+  RightClick: 3
+}
 
 resourceManager.addImage('assets/pipes.png');
 resourceManager.loadAll();
 
-canvas.onclick = function(event) {
+var type;
+
+var onclickCallback = function(event) {
   event.preventDefault();
-  pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), pipeManager.pipeType.Straight);
-  // TODO: Place or rotate pipe tile
+  switch (event.which) {
+    case Mouse.LeftClick:
+      pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), type);
+      break;
+    case Mouse.RightClick:
+      pipeManager.rotatePipe(pipeManager.convertCoord(normalizeClick(event)));
+      break;
+  }
+}
+canvas.onclick = onclickCallback;
+canvas.oncontextmenu = onclickCallback;
+
+window.onkeydown = function(event){
+  if(type == pipeManager.pipeType.Straight){
+    type = pipeManager.pipeType.Corner;
+  } else {
+    type = pipeManager.pipeType.Straight;
+  }
 }
 
 /**
@@ -44,6 +76,8 @@ var masterLoop = function(timestamp) {
 function update(elapsedTime) {
 
   // TODO: Advance the fluid
+  pipeManager.update(elapsedTime);
+  waterManager.update(elapsedTime);
 }
 
 /**
@@ -57,8 +91,7 @@ function render(elapsedTime, ctx) {
   ctx.fillStyle = "#777777";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // TODO: Render the board
-  //ctx.drawImage(resourceManager.getResource('assets/pipes.png'), 0, 0);
+  waterManager.render(elapsedTime, ctx);
   pipeManager.render(elapsedTime, ctx);
 }
 
