@@ -497,8 +497,10 @@ WaterManager.prototype.reset = function(){
       self.progressManager.isActive = true;
       // TODO: get next rect to animate and reset
     });
+}
 
-  this.progressManager.isActive = true;
+WaterManager.prototype.start = function(){
+    this.progressManager.isActive = true;
 }
 
 WaterManager.prototype.update = function(time){
@@ -524,11 +526,12 @@ WaterManager.prototype.render = function(time, ctx){
 },{"./ProgressManager.js":2}],5:[function(require,module,exports){
 "use strict";
 
-window.debug = true;
+window.debug = false;
 
 /* Classes */
 const Game = require('./game');
 const ResourceManager = require('./ResourceManager.js');
+const ProgressManager = require('./ProgressManager.js');
 const PipeManager = require('./PipeManager.js');
 const WaterManager = require('./WaterManager.js');
 const Hud = require('./hud.js');
@@ -540,6 +543,34 @@ var player = {score: 0, level: 0};
 var hud = new Hud(player, canvas.width, canvas.height);
 var pipeManager;
 var waterManager;
+
+var gameOverAlpha = 0;
+var gameOverProgress = new ProgressManager(1000,
+  function(pm, percent){
+    gameOverAlpha = percent;
+  },
+  function(pm) {
+    gameOverProgress.reset();
+    pipeManager.reset();
+    waterManager.reset();
+    gameOverAlpha = 1;
+    player.level = 0;
+    player.score = 0;
+  }
+);
+
+var newGameProgress = new ProgressManager(1000,
+  function(pm, percent){
+    gameOverAlpha = 1 - percent;
+  },
+  function(pm) {
+    gameOverAlpha = 0;
+    newGameProgress.reset();
+    waterManager.start();
+    gameState = GameState.Playing;
+  }
+);
+
 var resourceManager = new ResourceManager(function(){
   // Load game
   pipeManager = new PipeManager(resourceManager.getResource('assets/pipes2.png'));
@@ -548,18 +579,24 @@ var resourceManager = new ResourceManager(function(){
   waterManager = new WaterManager(pipeManager,
     function(didWin){
       if(didWin){
-
         pipeManager.reset();
         waterManager.reset();
 
         player.level += 1;
         waterManager.setLevel(player.level);
+
+        waterManager.start();
+      }else{
+        gameState = GameState.Over;
+        gameOverProgress.isActive = true;
       }
     },
     function(scoreIncrease){
       player.score += scoreIncrease;
     }
   );
+
+  waterManager.start();
 
   masterLoop(performance.now());
 });
@@ -568,6 +605,13 @@ var Mouse = {
   LeftClick: 1,
   RightClick: 3
 }
+
+var GameState = {
+  Playing: 0,
+  Over: 1
+}
+
+var gameState = GameState.Playing;
 
 resourceManager.addImage('assets/pipes2.png');
 resourceManager.loadAll();
@@ -595,6 +639,10 @@ canvas.onclick = onclickCallback;
 canvas.oncontextmenu = onclickCallback;
 
 window.onkeydown = function(event){
+  if(gameState == GameState.Over && event.keyCode == 32){
+    newGameProgress.isActive = true;
+  }
+
   if(!window.debug) return;
 
   if(type == pipeManager.pipeType.Straight){
@@ -623,8 +671,12 @@ var masterLoop = function(timestamp) {
  * the number of milliseconds passed since the last frame.
  */
 function update(elapsedTime) {
-  pipeManager.update(elapsedTime);
-  waterManager.update(elapsedTime);
+  if(gameState == GameState.Playing){
+    pipeManager.update(elapsedTime);
+    waterManager.update(elapsedTime);
+  }
+  gameOverProgress.progress(elapsedTime);
+  newGameProgress.progress(elapsedTime);
 }
 
 /**
@@ -641,6 +693,23 @@ function render(elapsedTime, ctx) {
   waterManager.render(elapsedTime, ctx);
   pipeManager.render(elapsedTime, ctx);
   hud.render(elapsedTime, ctx);
+
+  // Animate game Over
+  ctx.save();
+  ctx.globalAlpha=gameOverAlpha;
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "yellow";
+  ctx.font = "bold 40px Garamond";
+  ctx.textAlign="center";
+  ctx.fillText("Game Over", canvas.width / 2, canvas.height / 2);
+  ctx.font = "bold 24px Garamond";
+  ctx.fillText("Space to play again", canvas.width / 2, canvas.height / 2 + 30 );
+
+  ctx.restore();
+
+
 }
 
 function normalizeClick(event){
@@ -650,7 +719,7 @@ function normalizeClick(event){
   return {x: x, y: y};
 }
 
-},{"./PipeManager.js":1,"./ResourceManager.js":3,"./WaterManager.js":4,"./game":6,"./hud.js":7}],6:[function(require,module,exports){
+},{"./PipeManager.js":1,"./ProgressManager.js":2,"./ResourceManager.js":3,"./WaterManager.js":4,"./game":6,"./hud.js":7}],6:[function(require,module,exports){
 "use strict";
 
 /**

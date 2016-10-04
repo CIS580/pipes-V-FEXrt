@@ -97,8 +97,10 @@ WaterManager.prototype.reset = function(){
       self.progressManager.isActive = true;
       // TODO: get next rect to animate and reset
     });
+}
 
-  this.progressManager.isActive = true;
+WaterManager.prototype.start = function(){
+    this.progressManager.isActive = true;
 }
 
 WaterManager.prototype.update = function(time){
