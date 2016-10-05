@@ -5,7 +5,7 @@ module.exports = exports = PipeManager
 function PipeManager(spritesheet) {
   this.spritesheet = {};
   this.spritesheet.image = spritesheet;
-  this.spritesheet.size = 32;
+  this.spritesheet.size = 31.5;
   this.spritesheet.width = 4;
   this.spritesheet.height = 5;
 
@@ -94,8 +94,9 @@ PipeManager.prototype.reset = function(){
 }
 
 PipeManager.prototype.addPipe = function(location, pipeType){
-  if(this.findPipe(location)) return;
+  if(this.findPipe(location)) return false;
   this.addPipeUnprotected(location, pipeType);
+  return true;
 }
 
 PipeManager.prototype.addPipeUnprotected = function(location, pipeType){
@@ -104,9 +105,10 @@ PipeManager.prototype.addPipeUnprotected = function(location, pipeType){
 
 PipeManager.prototype.rotatePipe = function(location){
   var pipe = this.findPipe(location)
-  if(typeof pipe === 'undefined') return;
-  if(!pipe.enabled) return;
+  if(typeof pipe === 'undefined') return false;
+  if(!pipe.enabled) return false;
   pipe.idx = (pipe.idx + 1) % this.rotationMap[pipe.type].length;
+  return true;
 }
 
 PipeManager.prototype.findPipe = function(location){

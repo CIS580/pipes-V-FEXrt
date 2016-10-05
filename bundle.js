@@ -1,12 +1,47 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 "use strict";
 
+module.exports = exports = AudioManager;
+
+function AudioManager(resourceManager) {
+  this.AudioClip = {
+    Place: 0,
+    Rotate: 1,
+    LevelComplete: 2,
+    Death: 3,
+    Background: 4
+  };
+
+  this.clips = [
+    resourceManager.getResource('assets/place.wav'),
+    resourceManager.getResource('assets/rotate.wav'),
+    resourceManager.getResource('assets/levelcomplete.wav'),
+    resourceManager.getResource('assets/gameover.wav'),
+    resourceManager.getResource('assets/pumped.mp3')
+  ]
+
+  this.clips[this.AudioClip.Background].addEventListener('ended', function() {
+        this.currentTime = 0;
+        this.play();
+    }, false);
+
+  this.clips[this.AudioClip.Background].play();
+
+}
+
+AudioManager.prototype.play = function(audioClip){
+  this.clips[audioClip].play();
+}
+
+},{}],2:[function(require,module,exports){
+"use strict";
+
 module.exports = exports = PipeManager
 
 function PipeManager(spritesheet) {
   this.spritesheet = {};
   this.spritesheet.image = spritesheet;
-  this.spritesheet.size = 32;
+  this.spritesheet.size = 31.5;
   this.spritesheet.width = 4;
   this.spritesheet.height = 5;
 
@@ -95,8 +130,9 @@ PipeManager.prototype.reset = function(){
 }
 
 PipeManager.prototype.addPipe = function(location, pipeType){
-  if(this.findPipe(location)) return;
+  if(this.findPipe(location)) return false;
   this.addPipeUnprotected(location, pipeType);
+  return true;
 }
 
 PipeManager.prototype.addPipeUnprotected = function(location, pipeType){
@@ -105,9 +141,10 @@ PipeManager.prototype.addPipeUnprotected = function(location, pipeType){
 
 PipeManager.prototype.rotatePipe = function(location){
   var pipe = this.findPipe(location)
-  if(typeof pipe === 'undefined') return;
-  if(!pipe.enabled) return;
+  if(typeof pipe === 'undefined') return false;
+  if(!pipe.enabled) return false;
   pipe.idx = (pipe.idx + 1) % this.rotationMap[pipe.type].length;
+  return true;
 }
 
 PipeManager.prototype.findPipe = function(location){
@@ -310,7 +347,7 @@ PipeManager.prototype.render = function(elapsedTime, ctx){
   });
 }
 
-},{}],2:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 "use strict";
 
 module.exports = exports = ProgressManager;
@@ -349,7 +386,7 @@ ProgressManager.prototype.reset = function(){
   this.isActive = false;
 }
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 "use strict";
 
 module.exports = exports = ResourceManager
@@ -397,7 +434,7 @@ ResourceManager.prototype.loadAll = function() {
   });
 }
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 "use strict";
 
 module.exports = exports = WaterManager;
@@ -523,7 +560,7 @@ WaterManager.prototype.render = function(time, ctx){
   ctx.fillRect(this.currentRectRender.x, this.currentRectRender.y, this.currentRectRender.width, this.currentRectRender.height);
 }
 
-},{"./ProgressManager.js":2}],5:[function(require,module,exports){
+},{"./ProgressManager.js":3}],6:[function(require,module,exports){
 "use strict";
 
 window.debug = false;
@@ -535,6 +572,7 @@ const ProgressManager = require('./ProgressManager.js');
 const PipeManager = require('./PipeManager.js');
 const WaterManager = require('./WaterManager.js');
 const Hud = require('./hud.js');
+const AudioManager = require('./AudioManager.js');
 
 /* Global variables */
 var canvas = document.getElementById('screen');
@@ -543,6 +581,7 @@ var player = {score: 0, level: 0};
 var hud = new Hud(player, canvas.width, canvas.height);
 var pipeManager;
 var waterManager;
+var audioManager;
 
 var gameOverAlpha = 0;
 var gameOverProgress = new ProgressManager(1000,
@@ -576,9 +615,15 @@ var resourceManager = new ResourceManager(function(){
   pipeManager = new PipeManager(resourceManager.getResource('assets/pipes2.png'));
   type = pipeManager.pipeType.Straight;
 
+  audioManager = new AudioManager(resourceManager);
+
+
   waterManager = new WaterManager(pipeManager,
     function(didWin){
       if(didWin){
+
+        audioManager.play(audioManager.AudioClip.LevelComplete);
+
         pipeManager.reset();
         waterManager.reset();
 
@@ -589,6 +634,7 @@ var resourceManager = new ResourceManager(function(){
       }else{
         gameState = GameState.Over;
         gameOverProgress.isActive = true;
+        audioManager.play(audioManager.AudioClip.Death);
       }
     },
     function(scoreIncrease){
@@ -614,12 +660,19 @@ var GameState = {
 var gameState = GameState.Playing;
 
 resourceManager.addImage('assets/pipes2.png');
+resourceManager.addAudio('assets/place.wav');
+resourceManager.addAudio('assets/rotate.wav');
+resourceManager.addAudio('assets/levelcomplete.wav');
+resourceManager.addAudio('assets/gameover.wav');
+resourceManager.addAudio('assets/pumped.mp3');
 resourceManager.loadAll();
 
 var type;
 
 var onclickCallback = function(event) {
   event.preventDefault();
+
+  if(gameState == GameState.Over) return;
 
   if(!window.debug){
     // Randomly select pipe if not in debug mode
@@ -628,10 +681,14 @@ var onclickCallback = function(event) {
 
   switch (event.which) {
     case Mouse.LeftClick:
-      pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), type);
+      if (pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), type)){
+        audioManager.play(audioManager.AudioClip.Place);
+      }
       break;
     case Mouse.RightClick:
-      pipeManager.rotatePipe(pipeManager.convertCoord(normalizeClick(event)));
+      if(pipeManager.rotatePipe(pipeManager.convertCoord(normalizeClick(event)))){
+        audioManager.play(audioManager.AudioClip.Rotate);
+      }
       break;
   }
 }
@@ -719,7 +776,7 @@ function normalizeClick(event){
   return {x: x, y: y};
 }
 
-},{"./PipeManager.js":1,"./ProgressManager.js":2,"./ResourceManager.js":3,"./WaterManager.js":4,"./game":6,"./hud.js":7}],6:[function(require,module,exports){
+},{"./AudioManager.js":1,"./PipeManager.js":2,"./ProgressManager.js":3,"./ResourceManager.js":4,"./WaterManager.js":5,"./game":7,"./hud.js":8}],7:[function(require,module,exports){
 "use strict";
 
 /**
@@ -777,7 +834,7 @@ Game.prototype.loop = function(newTime) {
   this.frontCtx.drawImage(this.backBuffer, 0, 0);
 }
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 
 /**
@@ -859,4 +916,4 @@ Hud.prototype.render = function(time, ctx) {
   ctx.fillText("Score: " + this.player.score, centerX, bottomCenterY + 10 );
 }
 
-},{}]},{},[5]);
+},{}]},{},[6]);

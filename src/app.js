@@ -9,6 +9,7 @@ const ProgressManager = require('./ProgressManager.js');
 const PipeManager = require('./PipeManager.js');
 const WaterManager = require('./WaterManager.js');
 const Hud = require('./hud.js');
+const AudioManager = require('./AudioManager.js');
 
 /* Global variables */
 var canvas = document.getElementById('screen');
@@ -17,6 +18,7 @@ var player = {score: 0, level: 0};
 var hud = new Hud(player, canvas.width, canvas.height);
 var pipeManager;
 var waterManager;
+var audioManager;
 
 var gameOverAlpha = 0;
 var gameOverProgress = new ProgressManager(1000,
@@ -50,9 +52,15 @@ var resourceManager = new ResourceManager(function(){
   pipeManager = new PipeManager(resourceManager.getResource('assets/pipes2.png'));
   type = pipeManager.pipeType.Straight;
 
+  audioManager = new AudioManager(resourceManager);
+
+
   waterManager = new WaterManager(pipeManager,
     function(didWin){
       if(didWin){
+
+        audioManager.play(audioManager.AudioClip.LevelComplete);
+
         pipeManager.reset();
         waterManager.reset();
 
@@ -63,6 +71,7 @@ var resourceManager = new ResourceManager(function(){
       }else{
         gameState = GameState.Over;
         gameOverProgress.isActive = true;
+        audioManager.play(audioManager.AudioClip.Death);
       }
     },
     function(scoreIncrease){
@@ -88,12 +97,19 @@ var GameState = {
 var gameState = GameState.Playing;
 
 resourceManager.addImage('assets/pipes2.png');
+resourceManager.addAudio('assets/place.wav');
+resourceManager.addAudio('assets/rotate.wav');
+resourceManager.addAudio('assets/levelcomplete.wav');
+resourceManager.addAudio('assets/gameover.wav');
+resourceManager.addAudio('assets/pumped.mp3');
 resourceManager.loadAll();
 
 var type;
 
 var onclickCallback = function(event) {
   event.preventDefault();
+
+  if(gameState == GameState.Over) return;
 
   if(!window.debug){
     // Randomly select pipe if not in debug mode
@@ -102,10 +118,14 @@ var onclickCallback = function(event) {
 
   switch (event.which) {
     case Mouse.LeftClick:
-      pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), type);
+      if (pipeManager.addPipe(pipeManager.convertCoord(normalizeClick(event)), type)){
+        audioManager.play(audioManager.AudioClip.Place);
+      }
       break;
     case Mouse.RightClick:
-      pipeManager.rotatePipe(pipeManager.convertCoord(normalizeClick(event)));
+      if(pipeManager.rotatePipe(pipeManager.convertCoord(normalizeClick(event)))){
+        audioManager.play(audioManager.AudioClip.Rotate);
+      }
       break;
   }
 }
