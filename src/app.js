@@ -191,7 +191,7 @@ function render(elapsedTime, ctx) {
   // Animate game Over
   ctx.save();
   ctx.globalAlpha=gameOverAlpha;
-  ctx.fillStyle = "#000000";
+  ctx.fillStyle = "black";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.fillStyle = "yellow";

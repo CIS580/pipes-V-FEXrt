@@ -309,4 +309,14 @@ PipeManager.prototype.render = function(elapsedTime, ctx){
       // Destination Rect
       item.x * self.map.scale, item.y * self.map.scale, self.map.scale, self.map.scale);
   });
+
+  for(var i = 0; i < this.map.width; i++){
+    for(var j = 0; j < this.map.height; j++){
+        ctx.beginPath();
+        ctx.strokeStyle="black";
+        ctx.rect(i * this.map.scale, j * this.map.scale, this.map.scale, this.map.scale);
+        ctx.stroke();
+    }
+  }
+
 }
